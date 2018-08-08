@@ -503,7 +503,7 @@ final class PhotoLibraryService {
     // as described here: http://stackoverflow.com/questions/11972185/ios-save-photo-in-an-app-specific-album
     // but first find a way to save animated gif with it.
     // TODO: should return library item
-    func saveImage(_ url: String, album: String, completion: @escaping (_ libraryItem: NSDictionary?, _ error: String?)->Void) {
+    func saveImage(_ url: String, albumName: String, completion: @escaping (_ libraryItem: NSDictionary?, _ error: String?)->Void) {
 
         let sourceData: Data
         do {
@@ -512,56 +512,86 @@ final class PhotoLibraryService {
             completion(nil, "\(String(describing: error))")
             return
         }
-
-        let assetsLibrary = ALAssetsLibrary()
-
-        func saveImage(_ photoAlbum: PHAssetCollection) {
-            assetsLibrary.writeImageData(toSavedPhotosAlbum: sourceData, metadata: nil) { (assetUrl: URL?, error: Error?) in
-
-                if error != nil {
-                    completion(nil, "Could not write image to album: \(String(describing: error))")
-                    return
-                }
-
-                guard let assetUrl = assetUrl else {
-                    completion(nil, "Writing image to album resulted empty asset")
-                    return
-                }
-
-                self.putMediaToAlbum(assetsLibrary, url: assetUrl, album: album, completion: { (error) in
-                    if error != nil {
-                        completion(nil, error)
+        
+        let decodedimage:UIImage = UIImage(data: sourceData)!
+        
+        func save() {
+            if let album = PhotoLibraryService.findAlbum(albumName: albumName) {
+                PhotoLibraryService.save(image: decodedimage, album: album, completion: nil)
+            } else {
+                PhotoLibraryService.createAlbum(albumName: albumName, completion: { (collection) in
+                    if let collection = collection {
+                        PhotoLibraryService.save(image: decodedimage, album: collection, completion: nil)
                     } else {
-                        let fetchResult = PHAsset.fetchAssets(withALAssetURLs: [assetUrl], options: nil)
-                        var libraryItem: NSDictionary? = nil
-                        if fetchResult.count == 1 {
-                            let asset = fetchResult.firstObject
-                            if let asset = asset {
-                                libraryItem = self.assetToLibraryItem(asset: asset, useOriginalFileNames: false, includeAlbumData: true)
-                            }
-                        }
-                        completion(libraryItem, nil)
+                        completion(nil, "Error saving image")
                     }
                 })
-
             }
         }
-
-        if let photoAlbum = PhotoLibraryService.getPhotoAlbum(album) {
-            saveImage(photoAlbum)
-            return
+        
+        if PHPhotoLibrary.authorizationStatus() == .authorized {
+            save()
+        } else {
+            PHPhotoLibrary.requestAuthorization({ (status) in
+                if status == .authorized {
+                    save()
+                }
+            })
         }
-
-        PhotoLibraryService.createPhotoAlbum(album) { (photoAlbum: PHAssetCollection?, error: String?) in
-
-            guard let photoAlbum = photoAlbum else {
-                completion(nil, error)
-                return
-            }
-
-            saveImage(photoAlbum)
-
-        }
+        
+//
+//
+//        let assetsLibrary = ALAssetsLibrary()
+//
+//        func saveImage(_ photoAlbum: PHAssetCollection) {
+//            assetsLibrary.writeImageData(toSavedPhotosAlbum: sourceData, metadata: nil) { (assetUrl: URL?, error: Error?) in
+//
+//                if error != nil {
+//                    completion(nil, "Could not write image to album: \(String(describing: error))")
+//                    return
+//                }
+//
+//                guard let assetUrl = assetUrl else {
+//                    completion(nil, "Writing image to album resulted empty asset")
+//                    return
+//                }
+//
+//
+//
+//                self.putMediaToAlbum(assetsLibrary, url: assetUrl, album: album, completion: { (error) in
+//                    if error != nil {
+//                        completion(nil, error)
+//                    } else {
+//                        let fetchResult = PHAsset.fetchAssets(withALAssetURLs: [assetUrl], options: nil)
+//                        var libraryItem: NSDictionary? = nil
+//                        if fetchResult.count == 1 {
+//                            let asset = fetchResult.firstObject
+//                            if let asset = asset {
+//                                libraryItem = self.assetToLibraryItem(asset: asset, useOriginalFileNames: false, includeAlbumData: true)
+//                            }
+//                        }
+//                        completion(libraryItem, nil)
+//                    }
+//                })
+//
+//            }
+//        }
+//
+//        if let photoAlbum = PhotoLibraryService.getPhotoAlbum(album) {
+//            saveImage(photoAlbum)
+//            return
+//        }
+//
+//        PhotoLibraryService.createPhotoAlbum(album) { (photoAlbum: PHAssetCollection?, error: String?) in
+//
+//            guard let photoAlbum = photoAlbum else {
+//                completion(nil, error)
+//                return
+//            }
+//
+//            saveImage(photoAlbum)
+//
+//        }
 
     }
 
@@ -646,6 +676,63 @@ final class PhotoLibraryService {
             case .error(let description): return description
             }
         }
+    }
+    
+    fileprivate static func findAlbum(albumName: String) -> PHAssetCollection? {
+        let fetchOptions = PHFetchOptions()
+        fetchOptions.predicate = NSPredicate(format: "title = %@", albumName)
+        let fetchResult : PHFetchResult = PHAssetCollection.fetchAssetCollections(with: .album, subtype: .any, options: fetchOptions)
+        guard let photoAlbum = fetchResult.firstObject else {
+            return nil
+        }
+        return photoAlbum
+    }
+    
+    fileprivate static func createAlbum(albumName: String, completion: @escaping (PHAssetCollection?)->()) {
+        var albumPlaceholder: PHObjectPlaceholder?
+        PHPhotoLibrary.shared().performChanges({
+            let createAlbumRequest = PHAssetCollectionChangeRequest.creationRequestForAssetCollection(withTitle: albumName)
+            albumPlaceholder = createAlbumRequest.placeholderForCreatedAssetCollection
+        }, completionHandler: { success, error in
+            if success {
+                guard let placeholder = albumPlaceholder else {
+                    completion(nil)
+                    return
+                }
+                let fetchResult = PHAssetCollection.fetchAssetCollections(withLocalIdentifiers: [placeholder.localIdentifier], options: nil)
+                guard let album = fetchResult.firstObject else {
+                    completion(nil)
+                    return
+                }
+                completion(album)
+            } else {
+                completion(nil)
+            }
+        })
+    }
+    
+    fileprivate static func save(image: UIImage, album: PHAssetCollection, completion:((PHAsset?)->())? = nil) {
+        var placeholder: PHObjectPlaceholder?
+        PHPhotoLibrary.shared().performChanges({
+            let createAssetRequest = PHAssetChangeRequest.creationRequestForAsset(from: image)
+            guard let albumChangeRequest = PHAssetCollectionChangeRequest(for: album),
+                let photoPlaceholder = createAssetRequest.placeholderForCreatedAsset else { return }
+            placeholder = photoPlaceholder
+            let fastEnumeration = NSArray(array: [photoPlaceholder] as [PHObjectPlaceholder])
+            albumChangeRequest.addAssets(fastEnumeration)
+        }, completionHandler: { success, error in
+            guard let placeholder = placeholder else {
+                completion?(nil)
+                return
+            }
+            if success {
+                let assets:PHFetchResult<PHAsset> =  PHAsset.fetchAssets(withLocalIdentifiers: [placeholder.localIdentifier], options: nil)
+                let asset:PHAsset? = assets.firstObject
+                completion?(asset)
+            } else {
+                completion?(nil)
+            }
+        })
     }
 
     fileprivate func getDataFromURL(_ url: String) throws -> Data {

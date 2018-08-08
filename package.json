@@ -1,5 +1,5 @@
 {
-  "name": "cordova-plugin-photo-library",
+  "name": "cordova-plugin-photo-library-cat",
   "version": "2.1.1",
   "description": "Plugin that just gets photos from the gallery",
   "main": "index.js",
@@ -10,20 +10,12 @@
     "copy-test-images:android:emulator": "adb -e push tests/test-images /mnt/sdcard/DCIM && adb -e shell am broadcast -a android.intent.action.MEDIA_MOUNTED -d file:///sdcard",
     "copy-test-images:ios:simulator": "xcrun simctl addmedia booted tests/test-images/*"
   },
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/terikon/cordova-plugin-photo-library.git"
-  },
   "author": {
     "name": "Roman Viskin",
     "email": "npm@terikon.com",
     "url": "http://il.linkedin.com/in/romanviskin"
   },
   "license": "MIT",
-  "bugs": {
-    "url": "https://github.com/terikon/cordova-plugin-photo-library/issues"
-  },
-  "homepage": "https://github.com/terikon/cordova-plugin-photo-library#readme",
   "devDependencies": {
     "eslint": "^3.14.1",
     "@types/cordova": "^0.0.34",

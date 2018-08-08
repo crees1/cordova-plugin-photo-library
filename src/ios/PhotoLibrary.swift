@@ -240,7 +240,7 @@ import Foundation
             let url = command.arguments[0] as! String
             let album = command.arguments[1] as! String
 
-            service.saveImage(url, album: album) { (libraryItem: NSDictionary?, error: String?) in
+            service.saveImage(url, albumName: album) { (libraryItem: NSDictionary?, error: String?) in
                 if (error != nil) {
                     let pluginResult = CDVPluginResult(status: CDVCommandStatus_ERROR, messageAs: error)
                     self.commandDelegate!.send(pluginResult, callbackId: command.callbackId)
